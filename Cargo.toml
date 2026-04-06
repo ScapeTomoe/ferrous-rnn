@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 pyo3 = { version = "0.21", features = ["extension-module"] }
+ndarray = "0.15"  
 numpy = "0.21"
 
 [lib]

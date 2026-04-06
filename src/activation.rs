@@ -1,14 +1,23 @@
-fn relu(x:f32) -> f32{
-    let result: f32;
-    unsafe{
-        std::arch::asm!(
-            "xorps {zero},{zero}",
-            "maxss {zero},{input}",
-            input=in(xmm_reg) x,
-            zero=out(xmm_reg) result,
-        );
+fn relu(x: f32) -> f32 {
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        let result: f32;
+        unsafe {
+            std::arch::asm!(
+                "xorps {zero},{zero}",
+                "maxss {zero},{input}",
+                input = in(xmm_reg) x,
+                zero = out(xmm_reg) result,
+            );
+        }
+        result
     }
-    result
+
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        if x > 0.0 { x } else { 0.0 }
+    }
 }
 
 fn sigmoid(x:f32) ->f32{
@@ -20,23 +29,30 @@ fn tanh(x:f32) ->f32{
 }
 
 fn leaky_relu(x: f32) -> f32 {
-    let alpha: f32 = 0.01;
-    let result: f32;
-    unsafe {
-        std::arch::asm!(
-            "xorps {zero},{zero}",
-            "maxss {zero},{input}",
-            "mulss {alpha},{neg}",
-            "minss {neg},{input2}",
-            "addss {zero},{neg}",
-            input  = in(xmm_reg) x,
-            input2 = in(xmm_reg) x,
-            alpha  = in(xmm_reg) alpha,
-            zero   = out(xmm_reg) result,
-            neg    = out(xmm_reg) _,
-        );
+    #[cfg(target_arch = "x86_64")]
+    {
+        let alpha: f32 = 0.01;
+        let result: f32;
+        unsafe {
+            std::arch::asm!(
+                "xorps {zero},{zero}",
+                "maxss {zero},{input}",
+                "mulss {alpha},{neg}",
+                "minss {neg},{input2}",
+                "addss {zero},{neg}",
+                input  = in(xmm_reg) x,
+                input2 = in(xmm_reg) x,
+                alpha  = in(xmm_reg) alpha,
+                zero   = out(xmm_reg) result,
+                neg    = out(xmm_reg) _,
+            );
+        }
+        result
     }
-    result
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        if x > 0.0 { x } else { 0.01 * x }
+    }
 }
 
 fn elu(x:f32) ->f32{

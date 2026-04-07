@@ -138,9 +138,9 @@ impl Rnn {
 
             for chunk in indices.chunks(batch_size){
                 let mut batch_grads=RnnGrads{
-                    d_wx:Array2::zero(self.wx.dim()),
-                    d_wh:Array2::zero(self.wh.dim()),
-                    d_b:Array1::zero(self.b.dim()),
+                    d_wx:Array2::zeros(self.wx.dim()),
+                    d_wh:Array2::zeros(self.wh.dim()),
+                    d_b:Array1::zeros(self.b.dim()),
                 };
                 for &idx in chunk{
                     let single_x=x.slice(s![idx, .., ..]).to_owned();

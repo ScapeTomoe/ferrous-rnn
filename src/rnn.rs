@@ -137,7 +137,7 @@ impl Rnn {
             indices.shuffle(&mut rng);
 
             for chunk in indices.chunks(batch_size){
-                let mut batch_grads=RunGrads{
+                let mut batch_grads=RnnGrads{
                     d_wx:Array2::zero(self.wx.dim()),
                     d_wh:Array2::zero(self.wh.dim()),
                     d_b:Array1::zero(self.b.dim()),

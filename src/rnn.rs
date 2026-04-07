@@ -4,6 +4,9 @@ use crate::params::RnnGrads;
 use ndarray::Array1;
 use ndarray::Array2;
 use ndarray::Axis;
+use ndarray_rand::RandomExt;
+use ndarray_rand::rand_distr::Normal;
+use rand::thread_rng;
 
 pub struct Rnn {
     wx: Array2<f32>,
@@ -15,9 +18,11 @@ pub struct Rnn {
 
 impl Rnn {
     pub fn new(input_dim: usize, hidden_dim: usize, activation: Activation) -> Self {
+        let std_dev=(2.0/(input_dim+hidden_dim) as f32).sqrt();
+        let dist=Normal::new(0.0,std_dev).unwrap();
         Rnn {
-            wx: Array2::zeros((hidden_dim, input_dim)),
-            wh: Array2::zeros((hidden_dim, hidden_dim)),
+            wx: Array2::random((hidden_dim, input_dim),dist),
+            wh: Array2::random((hidden_dim, hidden_dim),dist),
             b: Array1::zeros(hidden_dim),
             hidden_dim,
             activation,
@@ -45,10 +50,10 @@ impl Rnn {
         match mode {
             OutputMode::Sequences => {
                 let mut result = Array2::zeros((history.len(), self.hidden_dim));
-for (t, h) in history.iter().enumerate() {
-    result.row_mut(t).assign(h);
-}
-RnnOutput::Sequences(result)
+                for (t, h) in history.iter().enumerate() {
+                    result.row_mut(t).assign(h);
+                }
+                RnnOutput::Sequences(result)
             }
             OutputMode::LastOnly => RnnOutput::LastOnly(h),
         }
@@ -117,27 +122,47 @@ RnnOutput::Sequences(result)
 
     pub fn fit(
         &mut self,
-        x: &Array2<f32>,
-        y: &Array2<f32>, //正解
+        x: &Array2<f32>, //入力データ
+        y: &Array2<f32>, //正解データ
         lr: f32,         //学習率
-        epochs: usize,   //学習回数
+        epochs: usize,   //エポック数
+        batch_size: usize, //バッチサイズ
         loss: &Loss,     //損失関数
     ) {
-        for epoch in 0..epochs {
-            let (output, history) = self.forward_train(x);
+        let num_samples=x.nrows();
+        let mut indices: Vec<usize>=(0..num_samples).collect();
+        let mut rng=thread_rng();
 
-            let y_pred = match output {
-                RnnOutput::Sequences(arr) => arr,
-                RnnOutput::LastOnly(_) => panic!("fit requires Sequences mode"),
-            };
+        for epoch in 0..epochs{
+            indices.shuffle(&mut rng);
 
-            let loss_val = loss.apply(&y_pred, y);
-            let delta = loss.grad(&y_pred, y);
-            let grads = self.backward(x, &history, &delta);
-            self.update(&grads, lr);
+            for chunk in indices.chunks(batch_size){
+                let mut batch_grads=RunGrads{
+                    d_wx:Array2::zero(self.wx.dim()),
+                    d_wh:Array2::zero(self.wh.dim()),
+                    d_b:Array1::zero(self.b.dim()),
+                };
+                for &idx in chunk{
+                    let single_x=x.slice(s![idx, .., ..]).to_owned();
+                    let single_y=y.slice(s![idx, .., ..]).to_owned();
 
-            if epoch % 100 == 0 {
-                println!("epoch: {},loss:{}", epoch, loss_val);
+                    let (output,history)=self.forward_train(&single_x);
+                    let y_pred=match output{
+                        RnnOutput::Sequences(arr)=>arr,
+                        _ => unreachable!(),
+                    };
+
+                    //逆伝播
+                    let delta=loss.grad(&y_pred,&single_y);
+                    let grads=self.backward(&single_x,&history,&delta);
+
+                    //蓄積
+                    batch_grads.d_wx+=&grads.d_wx;
+                    batch_grads.d_wh+=&grads.d_wh;
+                    batch_grads.d_b+=&grads.d_b;
+                }
+                let avg_lr=lr/chunk.len() as f32;
+                self.update(&batch_grads,avg_lr);
             }
         }
     }
